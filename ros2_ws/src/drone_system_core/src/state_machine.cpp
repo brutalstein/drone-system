@@ -9,7 +9,9 @@ StateMachine::StateMachine(Limits limits) : limits_(limits) {}
 bool StateMachine::validate(const Command& c, std::string* rejection) const {
   const auto finite = [](double v) { return std::isfinite(v); };
   if (!finite(c.vx) || !finite(c.vy) || !finite(c.vz) ||
-      !finite(c.yaw_rate) || !finite(c.takeoff_altitude_m)) {
+      !finite(c.yaw_rate) || !finite(c.takeoff_altitude_m) ||
+      !finite(c.target_x) || !finite(c.target_y) || !finite(c.target_z) ||
+      !finite(c.max_speed_mps)) {
     if (rejection) *rejection = "non-finite numeric field";
     return false;
   }
@@ -25,6 +27,13 @@ bool StateMachine::validate(const Command& c, std::string* rejection) const {
     if (rejection) *rejection = "invalid takeoff altitude";
     return false;
   }
+  if (c.mode == Mode::GotoPosition &&
+      (c.target_z < 0.0 || c.target_z > limits_.max_takeoff_altitude_m ||
+       c.max_speed_mps <= 0.0 ||
+       c.max_speed_mps > limits_.max_horizontal_speed_mps)) {
+    if (rejection) *rejection = "invalid position target or speed limit";
+    return false;
+  }
   if (c.mode == Mode::Velocity &&
       (c.lease < std::chrono::milliseconds(100) ||
        c.lease > std::chrono::milliseconds(2000))) {
@@ -32,7 +41,7 @@ bool StateMachine::validate(const Command& c, std::string* rejection) const {
     return false;
   }
   if (static_cast<std::uint8_t>(c.mode) >
-      static_cast<std::uint8_t>(Mode::EmergencyStop)) {
+      static_cast<std::uint8_t>(Mode::GotoPosition)) {
     if (rejection) *rejection = "unknown mode";
     return false;
   }
@@ -60,7 +69,13 @@ bool StateMachine::accept(const Command& c, Clock::time_point now,
 
   have_sequence_ = true;
   last_sequence_ = c.sequence;
-  setpoint_ = {c.mode, c.vx, c.vy, c.vz, c.yaw_rate, c.takeoff_altitude_m};
+  setpoint_ = {
+      c.mode,
+      c.vx, c.vy, c.vz,
+      c.yaw_rate,
+      c.takeoff_altitude_m,
+      c.target_x, c.target_y, c.target_z,
+      c.max_speed_mps};
   velocity_lease_expires_ =
       c.mode == Mode::Velocity ? now + c.lease : Clock::time_point::min();
   failsafe_active_ = false;
@@ -87,7 +102,8 @@ void StateMachine::external_hold(const std::string& reason) {
   force(Mode::Hold, reason);
 }
 
-void StateMachine::tick(Clock::time_point now, Clock::time_point manager_last_seen,
+void StateMachine::tick(Clock::time_point now,
+                        Clock::time_point manager_last_seen,
                         double battery_pct) {
   if (setpoint_.mode == Mode::EmergencyStop) return;
 
