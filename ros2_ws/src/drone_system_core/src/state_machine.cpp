@@ -59,7 +59,7 @@ bool StateMachine::accept(const Command& c, Clock::time_point now,
   return true;
 }
 
-void StateMachine::force(Mode mode, const char* reason) {
+void StateMachine::force(Mode mode, const std::string& reason) {
   setpoint_.mode = mode;
   setpoint_.vx = 0.0;
   setpoint_.vy = 0.0;
@@ -67,6 +67,11 @@ void StateMachine::force(Mode mode, const char* reason) {
   setpoint_.yaw_rate = 0.0;
   failsafe_active_ = true;
   failsafe_reason_ = reason;
+}
+
+void StateMachine::external_hold(const std::string& reason) {
+  if (setpoint_.mode == Mode::EmergencyStop) return;
+  force(Mode::Hold, reason);
 }
 
 void StateMachine::tick(Clock::time_point now, Clock::time_point manager_last_seen,

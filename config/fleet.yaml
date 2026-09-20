@@ -4,6 +4,8 @@ fleet:
     telemetry_hz: 20.0
     control_hz: 50.0
     manager_heartbeat_hz: 5.0
+    peer_heartbeat_hz: 2.0
+    peer_timeout_ms: 1500
     stale_telemetry_ms: 1500
     hold_after_ms: 1200
     land_after_ms: 5000

@@ -53,6 +53,7 @@ class StateMachine {
               Clock::time_point manager_last_seen, std::string* rejection = nullptr);
   void tick(Clock::time_point now, Clock::time_point manager_last_seen,
             double battery_pct);
+  void external_hold(const std::string& reason);
 
   [[nodiscard]] const Setpoint& setpoint() const noexcept { return setpoint_; }
   [[nodiscard]] bool failsafe_active() const noexcept { return failsafe_active_; }
@@ -61,7 +62,7 @@ class StateMachine {
 
  private:
   bool validate(const Command& command, std::string* rejection) const;
-  void force(Mode mode, const char* reason);
+  void force(Mode mode, const std::string& reason);
 
   Limits limits_;
   Setpoint setpoint_;
