@@ -34,9 +34,10 @@ function Is-Admin {
 }
 function Invoke-WSL([string]$Command, [switch]$AllowFailure) {
     & wsl.exe -d $Distro -- bash -lc $Command
-    $code = $LASTEXITCODE
-    if ($code -ne 0 -and -not $AllowFailure) { throw "WSL command failed with exit code $code" }
-    return $code
+    $script:LastWslExitCode = $LASTEXITCODE
+    if ($script:LastWslExitCode -ne 0 -and -not $AllowFailure) {
+        throw "WSL command failed with exit code $script:LastWslExitCode"
+    }
 }
 function Add-WSLEnv([string]$Entry) {
     $parts = @()
@@ -166,7 +167,8 @@ if ($Doctor) { $bootstrapFlags += "--doctor" }
 if ($SkipTests) { $bootstrapFlags += "--skip-tests" }
 Step $(if ($Doctor) { "Running full dependency/system doctor" } else { "Checking dependencies, building only when source changed, and validating tests" })
 $bootstrapCmd = 'cd "$HOME/.local/share/drone-system/repo" && ./scripts/smart_bootstrap.sh ' + ($bootstrapFlags -join " ")
-$bootstrapCode = Invoke-WSL $bootstrapCmd -AllowFailure
+Invoke-WSL $bootstrapCmd -AllowFailure
+$bootstrapCode = $script:LastWslExitCode
 if ($bootstrapCode -ne 0) {
     if ($Doctor) { Fail "Doctor found missing prerequisites. Re-run without -Doctor to repair automatically."; exit $bootstrapCode }
     throw "Bootstrap/build validation failed."
