@@ -1,156 +1,110 @@
-# Drone System
+# AERION Drone System
 
-A simulator-first, multi-drone brain and fleet-control platform built around **ROS 2 Jazzy**, **Gazebo Harmonic**, **modern C++20**, and an optional **xAI Grok** operator-assistance layer.
+A Windows-first, simulator-first multi-drone fleet brain built with ROS 2 Jazzy, Gazebo Harmonic, modern C++20, Qt and an optional xAI Grok advisory layer.
 
-> Status: foundation release. The project is designed for deterministic simulation, telemetry, fleet orchestration, fault injection, and operator-in-the-loop research. It is **not a certified flight controller** and must not be treated as safety certification for real aircraft.
+## One-command Windows start
 
-## Design goals
+Clone the repository and run:
 
-- Dynamic fleet size: 1..N drones without hard-coded IDs.
-- One operator console for every discovered drone.
-- Shared ROS 2/DDS fleet bus for telemetry, commands, peer presence, and manager heartbeat.
-- Per-drone watchdog with deterministic HOLD -> LAND failsafe on control-link loss.
-- Bounded queues / bounded registry growth and fixed-rate loops to avoid unbounded resource consumption.
-- Sequence-numbered, expiring, idempotent commands.
-- Simulation telemetry: pose, velocity, battery, link quality, peer count, CPU / memory estimate, mode, armed state, failsafe state, heartbeat age.
-- Fault injection for packet/link loss testing.
-- Gazebo visualization synchronized from the deterministic kinematic simulator.
-- Grok isolated from the flight-critical control path. AI can explain fleet state and assist the operator, but it never directly drives actuators.
-- Windows-first onboarding through WSL2 + Ubuntu 24.04 for a reproducible ROS/Gazebo environment.
-- CI gates for build, tests, formatting, static analysis and sanitizer builds.
+~~~powershell
+.\START-DRONE-SYSTEM.ps1
+~~~
 
-## Supported baseline
+You can also double-click START-DRONE-SYSTEM.cmd.
 
-The pinned reference stack is:
+The launcher performs a local Windows + WSL inventory, detects software that is already installed, installs only missing prerequisites, preserves build caches, chooses a bounded build parallelism from CPU/RAM, tests changed source and launches the stack under tmux.
+
+Useful commands:
+
+~~~powershell
+.\START-DRONE-SYSTEM.ps1 -Drones 8
+.\START-DRONE-SYSTEM.ps1 -Doctor
+.\START-DRONE-SYSTEM.ps1 -Stop
+.\START-DRONE-SYSTEM.ps1 -NoGrok
+.\START-DRONE-SYSTEM.ps1 -NoGazebo
+~~~
+
+The generated system reports stay local under runtime/ and are ignored by Git.
+
+## Premium operations console
+
+The AERION Qt console is designed for operators rather than developers. It includes:
+
+- live auto-scaling fleet radar
+- dynamic N-drone discovery
+- active fleet, average battery, link health and failsafe KPI cards
+- position, velocity, battery, link, peer, armed, failsafe and heartbeat telemetry
+- one-drone or all-drone target selection
+- TAKEOFF, LAND, RETURN HOME, HOLD and EMERGENCY STOP
+- press-and-hold movement controls that return to HOLD on release
+- W/A/S/D movement, R/F altitude, Q/E yaw and Space HOLD shortcuts
+- configurable horizontal / vertical speed, yaw rate and takeoff altitude
+- deterministic command palette such as "takeoff 5" and "vel 1 0 0 0.2"
+- Grok fleet-advisor panel with no command-publisher access
+- local operations event log
+
+Every flight command still passes through the sequence, TTL and control-envelope validation in the core state machine.
+
+## Link-loss behavior
+
+1. Healthy manager heartbeat: normal command operation.
+2. Heartbeat reaches the HOLD threshold: the drone enters HOLD.
+3. Heartbeat reaches the LAND threshold: the drone enters LAND.
+4. A restored connection does not silently resume an old movement command.
+5. Low simulated battery forces LAND.
+
+Duplicate or reordered commands, expired commands, non-finite values and out-of-envelope motion requests are rejected.
+
+## Stack
 
 - Windows 11 host
-- WSL2
-- Ubuntu 24.04 LTS
-- ROS 2 Jazzy Jalisco
+- WSL2 + Ubuntu 24.04
+- ROS 2 Jazzy
 - Gazebo Harmonic
 - C++20
-- Qt 5 Widgets
-- xAI Responses API (optional)
-
-Jazzy + Harmonic is intentionally chosen instead of chasing the newest ROS/Gazebo pair: it is an LTS-compatible, officially recommended pairing and is substantially easier to reproduce on developer machines.
+- Qt 5 Widgets + SVG
+- xAI Grok 4.6, optional
 
 ## Repository layout
 
-```text
+~~~text
 .
-├─ config/                         # Fleet/failsafe defaults
-├─ docs/                           # Architecture, safety, protocol notes
-├─ scripts/                        # Windows + WSL bootstrap / run helpers
-├─ ros2_ws/src/
-│  ├─ drone_system_interfaces/     # ROS messages/services
-│  ├─ drone_system_core/           # Fleet manager, drone brain, Grok advisor
-│  ├─ drone_system_sim/            # Deterministic simulation + Gazebo sync
-│  └─ drone_system_ui/             # Dynamic Qt fleet control console
-└─ .github/workflows/              # CI/security checks
-```
-
-## Quick start on Windows
-
-Open **PowerShell as Administrator** once:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\bootstrap_windows.ps1
-```
-
-Then open the installed Ubuntu 24.04 WSL terminal:
-
-```bash
-cd ~/drone-system
-./scripts/bootstrap_wsl.sh
-./scripts/build.sh
-./scripts/run_sim.sh 3
-```
-
-The last argument is the initial drone count. It is not a compile-time limit:
-
-```bash
-./scripts/run_sim.sh 1
-./scripts/run_sim.sh 3
-./scripts/run_sim.sh 12
-```
-
-The fleet manager accepts every valid drone ID that appears on the shared fleet bus until the configured safety cap is reached.
+├─ START-DRONE-SYSTEM.ps1
+├─ START-DRONE-SYSTEM.cmd
+├─ config/
+├─ docs/
+├─ scripts/
+└─ ros2_ws/src/
+   ├─ drone_system_interfaces/
+   ├─ drone_system_core/
+   ├─ drone_system_sim/
+   └─ drone_system_ui/
+~~~
 
 ## Grok
 
-Grok is optional and deliberately out-of-band from deterministic flight logic.
+Set the xAI key in the Windows environment before launch:
 
-```bash
-export XAI_API_KEY="..."
-export DRONE_GROK_MODEL="grok-4.6"
-ros2 run drone_system_core grok_advisor
-```
+~~~powershell
+$env:XAI_API_KEY="..."
+$env:DRONE_GROK_MODEL="grok-4.6"
+.\START-DRONE-SYSTEM.ps1
+~~~
 
-The key is read only from the process environment. Never commit API keys.
+The key value is not written to system reports or committed to Git.
 
-## ROS topics
+## Manual WSL flow
 
-| Topic | QoS intent | Purpose |
-|---|---|---|
-| `/fleet/telemetry` | best effort / bounded | high-rate telemetry from every drone |
-| `/fleet/heartbeat` | reliable | peer presence / liveness |
-| `/fleet/manager_heartbeat` | reliable | control-plane watchdog source |
-| `/fleet/command` | reliable | sequence-numbered operator commands |
-| `/fleet/state` | reliable | aggregated fleet snapshot for UI / AI |
-
-All shared messages include `drone_id`; no topic-per-drone discovery scheme is required.
-
-## Built-in command modes
-
-The foundation intentionally implements a small safety-oriented command set:
-
-- HOLD
-- TAKEOFF to a bounded altitude
-- LAND
-- RETURN_HOME
-- VELOCITY setpoint with configured horizontal/vertical/yaw limits
-- EMERGENCY_STOP for simulator safety testing
-
-Commands carry an ID, issue time and TTL. Stale or duplicate commands are rejected by the drone brain.
-
-## Link-loss policy
-
-Each drone uses a monotonic watchdog independent of ROS simulated time.
-
-1. Manager heartbeat healthy -> normal operation.
-2. Manager heartbeat missing for `hold_after_ms` -> HOLD.
-3. Missing for `land_after_ms` -> LAND.
-4. A fresh manager heartbeat does not automatically resume the previous mission. The operator must explicitly command the drone again.
-
-This avoids an unsafe "connection returned, continue old command" transition.
-
-## Resource-management policy
-
-- Registry entries are capped by `max_drones`.
-- Telemetry and command paths use bounded queues or last-value state rather than unbounded buffering.
-- No blocking network request is permitted on control-loop threads.
-- Timers run at explicit frequencies.
-- AI calls run on their own worker and use hard timeouts / input limits.
-- DDS QoS is selected by data criticality rather than making every stream reliable.
-- Simulation uses fixed integration steps and clamps acceleration / velocity.
-- Shutdown uses RAII and ROS executors are bounded to a configured thread count.
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/SAFETY.md](docs/SAFETY.md).
-
-## Validation
-
-```bash
-./scripts/build.sh
-./scripts/test.sh
-```
-
-CI also runs build/test and static checks on every push and pull request.
+~~~bash
+bash scripts/smart_bootstrap.sh
+bash scripts/launch_stack.sh 3
+bash scripts/stop_stack.sh
+~~~
 
 ## Scope
 
-The repository is intended for civilian robotics research, education, fleet-management simulation and operator tooling. It does not include autonomous targeting, weapon payload integration, or code intended to select or engage people or objects.
+This repository is a civilian robotics simulation and fleet-operations foundation, not aviation certification. It does not include autonomous targeting, weapon integration or engagement logic.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0.
