@@ -12,7 +12,7 @@ Clone the repository and run:
 
 You can also double-click START-DRONE-SYSTEM.cmd.
 
-The launcher performs a local Windows + WSL inventory, detects software that is already installed, installs only missing prerequisites, preserves build caches, chooses a bounded build parallelism from CPU/RAM, tests changed source and launches the stack under tmux.
+The launcher performs a private local Windows + WSL inventory, detects software that is already installed, installs only missing prerequisites, preserves build caches, chooses bounded build parallelism from CPU/RAM, tests changed source, launches the stack under tmux, then blocks on a live ROS health gate before declaring success. The health gate verifies the expected dynamic fleet, manager heartbeat, peer mesh and fresh link telemetry.
 
 Useful commands:
 
@@ -20,11 +20,12 @@ Useful commands:
 .\START-DRONE-SYSTEM.ps1 -Drones 8
 .\START-DRONE-SYSTEM.ps1 -Doctor
 .\START-DRONE-SYSTEM.ps1 -Stop
+.\START-DRONE-SYSTEM.ps1 -Status
 .\START-DRONE-SYSTEM.ps1 -NoGrok
 .\START-DRONE-SYSTEM.ps1 -NoGazebo
 ~~~
 
-The generated system reports stay local under runtime/ and are ignored by Git.
+The generated system reports stay local under runtime/ and are ignored by Git. They include relevant Windows hardware/software inventory, WSL/toolchain versions, Linux packages and the latest live stack-health result. Secret values such as XAI_API_KEY are never written to those reports.
 
 ## Premium operations console
 
@@ -39,7 +40,8 @@ The AERION Qt console is designed for operators rather than developers. It inclu
 - press-and-hold movement controls that return to HOLD on release
 - W/A/S/D movement, R/F altitude, Q/E yaw and Space HOLD shortcuts
 - configurable horizontal / vertical speed, yaw rate and takeoff altitude
-- deterministic command palette such as "takeoff 5" and "vel 1 0 0 0.2"
+- absolute XYZ precision targets with a bounded maximum travel speed
+- deterministic command palette such as "goto 10 -4 6 2", "takeoff 5" and "vel 1 0 0 0.2"
 - Grok fleet-advisor panel with no command-publisher access
 - local operations event log
 
