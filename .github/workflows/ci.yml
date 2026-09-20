@@ -22,6 +22,10 @@ jobs:
         shell: bash
         run: bash -n scripts/*.sh
 
+      - name: Validate Python automation syntax
+        shell: bash
+        run: python3 -m py_compile scripts/health_probe.py
+
       - name: Validate PowerShell launcher syntax
         shell: pwsh
         run: |
