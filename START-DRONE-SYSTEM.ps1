@@ -6,6 +6,7 @@ param(
     [switch]$NoGrok,
     [switch]$NoGazebo,
     [switch]$Stop,
+    [switch]$Status,
     [string]$Distro = "Ubuntu-24.04"
 )
 
@@ -54,6 +55,7 @@ function Ensure-AdminRelaunch {
     if ($NoGrok) { $argLine += " -NoGrok" }
     if ($NoGazebo) { $argLine += " -NoGazebo" }
     if ($Stop) { $argLine += " -Stop" }
+    if ($Status) { $argLine += " -Status" }
     Start-Process powershell.exe -Verb RunAs -ArgumentList $argLine
     exit 0
 }
@@ -61,9 +63,11 @@ function Ensure-AdminRelaunch {
 Write-Brand
 Step "Building a private local inventory of this PC"
 $os = Get-CimInstance Win32_OperatingSystem
-$cpu = Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors
-$gpus = Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterRAM
-$disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID,Size,FreeSpace
+$computer = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer,Model,SystemType
+$bios = Get-CimInstance Win32_BIOS | Select-Object Manufacturer,SMBIOSBIOSVersion,ReleaseDate
+$cpu = Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed
+$gpus = Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterRAM,VideoProcessor
+$disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID,Size,FreeSpace,FileSystem
 $apps = @()
 $roots = @(
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -77,17 +81,45 @@ $apps = $apps | Sort-Object DisplayName -Unique
 $tools = [ordered]@{}
 foreach ($name in @("git","cmake","python","pwsh","winget","wsl")) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
-    $tools[$name] = if ($cmd) { $cmd.Source } else { $null }
+    $version = $null
+    if ($cmd) {
+        try {
+            switch ($name) {
+                "git"    { $version = (& git --version 2>$null | Select-Object -First 1) }
+                "cmake"  { $version = (& cmake --version 2>$null | Select-Object -First 1) }
+                "python" { $version = (& python --version 2>&1 | Select-Object -First 1) }
+                "pwsh"   { $version = (& pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null | Select-Object -First 1) }
+                "winget" { $version = (& winget --version 2>$null | Select-Object -First 1) }
+                "wsl"    { $version = (& wsl --version 2>$null | Select-Object -First 1) }
+            }
+        } catch {}
+    }
+    $tools[$name] = [ordered]@{ path = if ($cmd) { $cmd.Source } else { $null }; version = $version }
 }
+$windowsFeatures = [ordered]@{}
+foreach ($feature in @("Microsoft-Windows-Subsystem-Linux","VirtualMachinePlatform")) {
+    try {
+        $state = (Get-WindowsOptionalFeature -Online -FeatureName $feature -ErrorAction Stop).State.ToString()
+    } catch {
+        $state = "unknown"
+    }
+    $windowsFeatures[$feature] = $state
+}
+$wslVersionText = $null
+try { $wslVersionText = (& wsl.exe --version 2>$null) -join "`n" } catch {}
 $report = [ordered]@{
     generated_at = (Get-Date).ToUniversalTime().ToString("o")
     computer_name = $env:COMPUTERNAME
+    computer = $computer
+    bios = $bios
     os = [ordered]@{ caption=$os.Caption; version=$os.Version; build=$os.BuildNumber; architecture=$os.OSArchitecture }
     cpu = $cpu
     memory_gb = [math]::Round($os.TotalVisibleMemorySize / 1MB,2)
     gpu = $gpus
     disks = $disks
     tools = $tools
+    windows_optional_features = $windowsFeatures
+    wsl_version = $wslVersionText
     installed_applications = $apps
 }
 $report | ConvertTo-Json -Depth 7 | Set-Content -Path (Join-Path $Runtime "system-report-windows.json") -Encoding UTF8
@@ -132,6 +164,15 @@ if ($env:XAI_API_KEY) {
     Good "xAI key detected and passed ephemerally to WSL; the key value is not written to reports."
 } elseif (-not $NoGrok) {
     Warn "XAI_API_KEY is not set. Core fleet system will run; Grok advisor will stay disabled."
+}
+
+if ($Status) {
+    Step "Reading current stack status"
+    $statusText = & wsl.exe -d $Distro -- bash -lc 'if [ -f "$HOME/.local/share/drone-system/repo/runtime/stack.env" ]; then cat "$HOME/.local/share/drone-system/repo/runtime/stack.env"; else echo "STATE=not_started"; fi'
+    Write-Host ""
+    $statusText | ForEach-Object { Write-Host "  $_" -ForegroundColor White }
+    Write-Host ""
+    exit 0
 }
 
 if ($Stop) {
@@ -202,4 +243,5 @@ Write-Host "  Linux scan   : $Runtime\system-report-wsl.json" -ForegroundColor D
 Write-Host ""
 Write-Host "  Stop later   : .\START-DRONE-SYSTEM.ps1 -Stop" -ForegroundColor Cyan
 Write-Host "  Health only  : .\START-DRONE-SYSTEM.ps1 -Doctor" -ForegroundColor Cyan
+Write-Host "  Stack status : .\START-DRONE-SYSTEM.ps1 -Status" -ForegroundColor Cyan
 Write-Host ""
