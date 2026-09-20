@@ -25,6 +25,12 @@ bool StateMachine::validate(const Command& c, std::string* rejection) const {
     if (rejection) *rejection = "invalid takeoff altitude";
     return false;
   }
+  if (c.mode == Mode::Velocity &&
+      (c.lease < std::chrono::milliseconds(100) ||
+       c.lease > std::chrono::milliseconds(2000))) {
+    if (rejection) *rejection = "invalid velocity command lease";
+    return false;
+  }
   if (static_cast<std::uint8_t>(c.mode) >
       static_cast<std::uint8_t>(Mode::EmergencyStop)) {
     if (rejection) *rejection = "unknown mode";
@@ -41,6 +47,11 @@ bool StateMachine::accept(const Command& c, Clock::time_point now,
     if (rejection) *rejection = "duplicate or reordered sequence";
     return false;
   }
+  if (setpoint_.mode == Mode::EmergencyStop &&
+      c.mode != Mode::EmergencyStop && c.mode != Mode::Hold) {
+    if (rejection) *rejection = "emergency stop latched; send HOLD to reset";
+    return false;
+  }
   if (c.mode != Mode::EmergencyStop &&
       now - manager_last_seen >= limits_.hold_after) {
     if (rejection) *rejection = "control link unhealthy";
@@ -50,6 +61,8 @@ bool StateMachine::accept(const Command& c, Clock::time_point now,
   have_sequence_ = true;
   last_sequence_ = c.sequence;
   setpoint_ = {c.mode, c.vx, c.vy, c.vz, c.yaw_rate, c.takeoff_altitude_m};
+  velocity_lease_expires_ =
+      c.mode == Mode::Velocity ? now + c.lease : Clock::time_point::min();
   failsafe_active_ = false;
   failsafe_reason_.clear();
 
@@ -86,8 +99,15 @@ void StateMachine::tick(Clock::time_point now, Clock::time_point manager_last_se
   const auto age = now - manager_last_seen;
   if (age >= limits_.land_after) {
     force(Mode::Land, "manager heartbeat lost");
-  } else if (age >= limits_.hold_after) {
+    return;
+  }
+  if (age >= limits_.hold_after) {
     force(Mode::Hold, "manager heartbeat stale");
+    return;
+  }
+  if (setpoint_.mode == Mode::Velocity &&
+      now >= velocity_lease_expires_) {
+    force(Mode::Hold, "velocity command lease expired");
   }
 }
 

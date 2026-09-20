@@ -69,3 +69,47 @@ TEST(StateMachine, ExternalPeerFailsafeForcesHoldAndNeedsFreshCommandToClear) {
   EXPECT_TRUE(sm.accept(c, now, now));
   EXPECT_FALSE(sm.failsafe_active());
 }
+
+TEST(StateMachine, VelocityLeaseExpiresIntoHold) {
+  StateMachine sm;
+  const auto t0 = StateMachine::Clock::now();
+  Command c;
+  c.sequence = 1;
+  c.mode = Mode::Velocity;
+  c.vx = 1.0;
+  c.lease = std::chrono::milliseconds(400);
+  ASSERT_TRUE(sm.accept(c, t0, t0));
+
+  sm.tick(t0 + std::chrono::milliseconds(399), t0, 100.0);
+  EXPECT_EQ(sm.setpoint().mode, Mode::Velocity);
+
+  sm.tick(t0 + std::chrono::milliseconds(401), t0, 100.0);
+  EXPECT_EQ(sm.setpoint().mode, Mode::Hold);
+  EXPECT_EQ(sm.failsafe_reason(), "velocity command lease expired");
+}
+
+TEST(StateMachine, EmergencyStopIsLatchedUntilExplicitHold) {
+  StateMachine sm;
+  const auto now = StateMachine::Clock::now();
+
+  Command stop;
+  stop.sequence = 1;
+  stop.mode = Mode::EmergencyStop;
+  ASSERT_TRUE(sm.accept(stop, now, now));
+  EXPECT_EQ(sm.setpoint().mode, Mode::EmergencyStop);
+
+  Command velocity;
+  velocity.sequence = 2;
+  velocity.mode = Mode::Velocity;
+  velocity.vx = 1.0;
+  velocity.lease = std::chrono::milliseconds(400);
+  EXPECT_FALSE(sm.accept(velocity, now, now));
+  EXPECT_EQ(sm.setpoint().mode, Mode::EmergencyStop);
+
+  Command reset;
+  reset.sequence = 3;
+  reset.mode = Mode::Hold;
+  EXPECT_TRUE(sm.accept(reset, now, now));
+  EXPECT_EQ(sm.setpoint().mode, Mode::Hold);
+  EXPECT_FALSE(sm.failsafe_active());
+}

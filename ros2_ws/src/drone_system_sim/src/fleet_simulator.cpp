@@ -183,6 +183,7 @@ class FleetSimulator final : public rclcpp::Node {
     c.vz = msg.linear.z;
     c.yaw_rate = msg.yaw_rate;
     c.takeoff_altitude_m = msg.takeoff_altitude_m;
+    c.lease = std::chrono::milliseconds(msg.ttl_ms);
 
     for (auto& d : drones_) {
       if (msg.drone_id != "*" && msg.drone_id != d.id) continue;

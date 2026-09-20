@@ -33,6 +33,7 @@ struct Command {
   double vz{0.0};
   double yaw_rate{0.0};
   double takeoff_altitude_m{0.0};
+  std::chrono::milliseconds lease{1000};
 };
 
 struct Setpoint {
@@ -67,6 +68,7 @@ class StateMachine {
   Limits limits_;
   Setpoint setpoint_;
   std::uint64_t last_sequence_{0};
+  Clock::time_point velocity_lease_expires_{Clock::time_point::min()};
   bool have_sequence_{false};
   bool failsafe_active_{false};
   std::string failsafe_reason_;

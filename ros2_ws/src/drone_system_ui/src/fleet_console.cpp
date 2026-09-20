@@ -185,6 +185,14 @@ class FleetConsole final : public QMainWindow {
     ui_timer_ = new QTimer(this);
     connect(ui_timer_, &QTimer::timeout, this, [this] { refresh_health(); });
     ui_timer_->start(250);
+
+    manual_timer_ = new QTimer(this);
+    connect(manual_timer_, &QTimer::timeout, this, [this] {
+      if (manual_active_) {
+        send_velocity(manual_vx_, manual_vy_, manual_vz_, manual_yaw_, false);
+      }
+    });
+    manual_timer_->start(100);
     setWindowTitle("AERION Fleet Operations");
     resize(1720, 980);
     setMinimumSize(1280, 760);
@@ -195,15 +203,15 @@ class FleetConsole final : public QMainWindow {
   void keyPressEvent(QKeyEvent* event) override {
     if (event->isAutoRepeat() || text_input_focused()) { QMainWindow::keyPressEvent(event); return; }
     switch (event->key()) {
-      case Qt::Key_W: send_velocity(horizontal_speed_->value(),0,0,0); break;
-      case Qt::Key_S: send_velocity(-horizontal_speed_->value(),0,0,0); break;
-      case Qt::Key_A: send_velocity(0,horizontal_speed_->value(),0,0); break;
-      case Qt::Key_D: send_velocity(0,-horizontal_speed_->value(),0,0); break;
-      case Qt::Key_R: send_velocity(0,0,vertical_speed_->value(),0); break;
-      case Qt::Key_F: send_velocity(0,0,-vertical_speed_->value(),0); break;
-      case Qt::Key_Q: send_velocity(0,0,0,yaw_rate_->value()); break;
-      case Qt::Key_E: send_velocity(0,0,0,-yaw_rate_->value()); break;
-      case Qt::Key_Space: send_simple(FleetCommand::HOLD, "HOLD"); break;
+      case Qt::Key_W: begin_manual(horizontal_speed_->value(),0,0,0); break;
+      case Qt::Key_S: begin_manual(-horizontal_speed_->value(),0,0,0); break;
+      case Qt::Key_A: begin_manual(0,horizontal_speed_->value(),0,0); break;
+      case Qt::Key_D: begin_manual(0,-horizontal_speed_->value(),0,0); break;
+      case Qt::Key_R: begin_manual(0,0,vertical_speed_->value(),0); break;
+      case Qt::Key_F: begin_manual(0,0,-vertical_speed_->value(),0); break;
+      case Qt::Key_Q: begin_manual(0,0,0,yaw_rate_->value()); break;
+      case Qt::Key_E: begin_manual(0,0,0,-yaw_rate_->value()); break;
+      case Qt::Key_Space: end_manual(); send_simple(FleetCommand::HOLD, "HOLD"); break;
       default: QMainWindow::keyPressEvent(event); break;
     }
   }
@@ -212,7 +220,7 @@ class FleetConsole final : public QMainWindow {
       switch (event->key()) {
         case Qt::Key_W: case Qt::Key_S: case Qt::Key_A: case Qt::Key_D:
         case Qt::Key_R: case Qt::Key_F: case Qt::Key_Q: case Qt::Key_E:
-          send_simple(FleetCommand::HOLD, "HOLD"); return;
+          end_manual(); return;
         default: break;
       }
     }
@@ -310,17 +318,17 @@ class FleetConsole final : public QMainWindow {
     auto* pad=new QGridLayout;
     auto* forward=button("↑  Forward"); auto* left=button("←  Left"); auto* stop=button("■  HOLD"); stop->setProperty("hold",true);
     auto* right=button("Right  →"); auto* back=button("↓  Back");
-    bind_momentary(forward,[this]{send_velocity(horizontal_speed_->value(),0,0,0);});
-    bind_momentary(back,[this]{send_velocity(-horizontal_speed_->value(),0,0,0);});
-    bind_momentary(left,[this]{send_velocity(0,horizontal_speed_->value(),0,0);});
-    bind_momentary(right,[this]{send_velocity(0,-horizontal_speed_->value(),0,0);});
+    bind_momentary(forward,[this]{begin_manual(horizontal_speed_->value(),0,0,0);});
+    bind_momentary(back,[this]{begin_manual(-horizontal_speed_->value(),0,0,0);});
+    bind_momentary(left,[this]{begin_manual(0,horizontal_speed_->value(),0,0);});
+    bind_momentary(right,[this]{begin_manual(0,-horizontal_speed_->value(),0,0);});
     connect(stop,&QPushButton::clicked,this,[this]{send_simple(FleetCommand::HOLD,"HOLD");});
     pad->addWidget(forward,0,1); pad->addWidget(left,1,0); pad->addWidget(stop,1,1); pad->addWidget(right,1,2); pad->addWidget(back,2,1);
     auto* yaw_left=button("Q  ↺ Yaw"); auto* up=button("R  +Altitude"); auto* down=button("F  -Altitude"); auto* yaw_right=button("Yaw ↻  E");
-    bind_momentary(yaw_left,[this]{send_velocity(0,0,0,yaw_rate_->value());});
-    bind_momentary(yaw_right,[this]{send_velocity(0,0,0,-yaw_rate_->value());});
-    bind_momentary(up,[this]{send_velocity(0,0,vertical_speed_->value(),0);});
-    bind_momentary(down,[this]{send_velocity(0,0,-vertical_speed_->value(),0);});
+    bind_momentary(yaw_left,[this]{begin_manual(0,0,0,yaw_rate_->value());});
+    bind_momentary(yaw_right,[this]{begin_manual(0,0,0,-yaw_rate_->value());});
+    bind_momentary(up,[this]{begin_manual(0,0,vertical_speed_->value(),0);});
+    bind_momentary(down,[this]{begin_manual(0,0,-vertical_speed_->value(),0);});
     pad->addWidget(yaw_left,0,0); pad->addWidget(up,0,2); pad->addWidget(down,2,0); pad->addWidget(yaw_right,2,2); control->addLayout(pad);
 
     auto* emergency=button("EMERGENCY STOP"); emergency->setProperty("danger",true);
@@ -357,7 +365,8 @@ class FleetConsole final : public QMainWindow {
     auto* b=new QPushButton(text); if(primary)b->setProperty("primary",true); b->setMinimumHeight(38); return b;
   }
   template<typename Fn> void bind_momentary(QPushButton* b,Fn fn) {
-    connect(b,&QPushButton::pressed,this,fn); connect(b,&QPushButton::released,this,[this]{send_simple(FleetCommand::HOLD,"HOLD");});
+    connect(b,&QPushButton::pressed,this,fn);
+    connect(b,&QPushButton::released,this,[this]{end_manual();});
   }
   bool text_input_focused() const { return (command_line_&&command_line_->hasFocus())||(ai_query_&&ai_query_->hasFocus()); }
   QString selected_target() const { auto data=target_->currentData(); return data.isValid()?data.toString():"*"; }
@@ -365,12 +374,42 @@ class FleetConsole final : public QMainWindow {
   FleetCommand base_command(std::uint8_t mode) {
     FleetCommand c; c.drone_id=selected_target().toStdString(); c.sequence=++sequence_; c.issued_at=node_->now(); c.ttl_ms=1000; c.mode=mode; return c;
   }
-  void publish(const FleetCommand& c,const QString& label) { command_pub_->publish(c); log_event(QString("%1 → %2").arg(label,selected_target()),"#72DDF7"); }
+  void publish(const FleetCommand& c,const QString& label) {
+    if (c.mode != FleetCommand::VELOCITY) manual_active_ = false;
+    command_pub_->publish(c);
+    log_event(QString("%1 → %2").arg(label,selected_target()),"#72DDF7");
+  }
   void send_simple(std::uint8_t mode,const QString& label) { publish(base_command(mode),label); }
-  void send_velocity(double vx,double vy,double vz,double yaw) {
-    if(std::hypot(vx,vy)>8.0||std::abs(vz)>3.0||std::abs(yaw)>1.2){log_event("Local control envelope rejected velocity command","#FF6685");return;}
-    auto c=base_command(FleetCommand::VELOCITY); c.linear.x=vx;c.linear.y=vy;c.linear.z=vz;c.yaw_rate=yaw;
-    publish(c,QString("VEL [%1, %2, %3] yaw %4").arg(vx,0,'f',2).arg(vy,0,'f',2).arg(vz,0,'f',2).arg(yaw,0,'f',2));
+
+  void begin_manual(double vx,double vy,double vz,double yaw) {
+    manual_active_ = true;
+    manual_vx_ = vx;
+    manual_vy_ = vy;
+    manual_vz_ = vz;
+    manual_yaw_ = yaw;
+    send_velocity(vx,vy,vz,yaw,true);
+  }
+
+  void end_manual() {
+    if (!manual_active_) return;
+    manual_active_ = false;
+    send_simple(FleetCommand::HOLD,"HOLD");
+  }
+
+  void send_velocity(double vx,double vy,double vz,double yaw,bool record=true) {
+    if(std::hypot(vx,vy)>8.0||std::abs(vz)>3.0||std::abs(yaw)>1.2){
+      if(record) log_event("Local control envelope rejected velocity command","#FF6685");
+      return;
+    }
+    auto c=base_command(FleetCommand::VELOCITY);
+    c.ttl_ms=450;
+    c.linear.x=vx;c.linear.y=vy;c.linear.z=vz;c.yaw_rate=yaw;
+    command_pub_->publish(c);
+    if(record) {
+      log_event(QString("VEL [%1, %2, %3] yaw %4 → %5")
+        .arg(vx,0,'f',2).arg(vy,0,'f',2).arg(vz,0,'f',2).arg(yaw,0,'f',2)
+        .arg(selected_target()),"#72DDF7");
+    }
   }
   void parse_command() {
     const QString raw=command_line_->text().trimmed(); if(raw.isEmpty())return;
@@ -412,7 +451,10 @@ class FleetConsole final : public QMainWindow {
   }
 
   std::uint64_t sequence_{0};std::shared_ptr<rclcpp::Node> node_;rclcpp::Publisher<FleetCommand>::SharedPtr command_pub_;rclcpp::Publisher<std_msgs::msg::String>::SharedPtr ai_query_pub_;rclcpp::Subscription<Telemetry>::SharedPtr telemetry_sub_;rclcpp::Subscription<std_msgs::msg::String>::SharedPtr ai_answer_sub_;
-  QComboBox* target_{};QLabel* connection_{};MetricCard* active_card_{};MetricCard* battery_card_{};MetricCard* link_card_{};MetricCard* failsafe_card_{};FleetRadar* radar_{};QTableWidget* table_{};QDoubleSpinBox* horizontal_speed_{};QDoubleSpinBox* vertical_speed_{};QDoubleSpinBox* yaw_rate_{};QDoubleSpinBox* takeoff_alt_{};QLineEdit* command_line_{};QLineEdit* ai_query_{};QTextBrowser* ai_answer_{};QTextBrowser* event_log_{};QTimer* ros_timer_{};QTimer* ui_timer_{};std::unordered_map<std::string,FleetEntry> fleet_;
+  QComboBox* target_{};QLabel* connection_{};MetricCard* active_card_{};MetricCard* battery_card_{};MetricCard* link_card_{};MetricCard* failsafe_card_{};FleetRadar* radar_{};QTableWidget* table_{};QDoubleSpinBox* horizontal_speed_{};QDoubleSpinBox* vertical_speed_{};QDoubleSpinBox* yaw_rate_{};QDoubleSpinBox* takeoff_alt_{};QLineEdit* command_line_{};QLineEdit* ai_query_{};QTextBrowser* ai_answer_{};QTextBrowser* event_log_{};QTimer* ros_timer_{};QTimer* ui_timer_{};QTimer* manual_timer_{};
+  bool manual_active_{false};
+  double manual_vx_{0.0},manual_vy_{0.0},manual_vz_{0.0},manual_yaw_{0.0};
+  std::unordered_map<std::string,FleetEntry> fleet_;
 };
 
 int main(int argc,char** argv) {
