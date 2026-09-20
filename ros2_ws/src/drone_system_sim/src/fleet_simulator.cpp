@@ -183,6 +183,10 @@ class FleetSimulator final : public rclcpp::Node {
     c.vz = msg.linear.z;
     c.yaw_rate = msg.yaw_rate;
     c.takeoff_altitude_m = msg.takeoff_altitude_m;
+    c.target_x = msg.target_position.x;
+    c.target_y = msg.target_position.y;
+    c.target_z = msg.target_position.z;
+    c.max_speed_mps = msg.max_speed_mps;
     c.lease = std::chrono::milliseconds(msg.ttl_ms);
 
     for (auto& d : drones_) {
@@ -241,6 +245,26 @@ class FleetSimulator final : public rclcpp::Node {
             ty = -d.y / std::max(0.001, dist) * 1.5;
           } else {
             tz = d.z > 0.05 ? -0.8 : 0.0;
+          }
+          break;
+        }
+        case Mode::GotoPosition: {
+          const double dx = sp.target_x - d.x;
+          const double dy = sp.target_y - d.y;
+          const double dz = sp.target_z - d.z;
+          const double horizontal = std::hypot(dx, dy);
+          const double distance = std::hypot(horizontal, dz);
+          if (distance > 0.12) {
+            if (horizontal > 0.08) {
+              const double horizontal_speed =
+                  std::min(sp.max_speed_mps, limits_.max_horizontal_speed_mps);
+              tx = dx / horizontal * horizontal_speed;
+              ty = dy / horizontal * horizontal_speed;
+            }
+            tz = std::clamp(
+                dz * 1.2,
+                -limits_.max_vertical_speed_mps,
+                limits_.max_vertical_speed_mps);
           }
           break;
         }
