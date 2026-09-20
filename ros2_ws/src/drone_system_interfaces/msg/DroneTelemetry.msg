@@ -1,0 +1,16 @@
+string drone_id
+uint64 sequence
+builtin_interfaces/Time stamp
+geometry_msgs/Point position
+geometry_msgs/Vector3 velocity
+float64 yaw_rad
+float32 battery_pct
+float32 link_quality_pct
+uint32 peer_count
+float32 cpu_pct
+float32 memory_mb
+uint8 mode
+bool armed
+bool failsafe_active
+string failsafe_reason
+uint32 manager_heartbeat_age_ms
