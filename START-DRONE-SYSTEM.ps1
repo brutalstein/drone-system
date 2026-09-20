@@ -48,13 +48,13 @@ function Add-WSLEnv([string]$Entry) {
 function Ensure-AdminRelaunch {
     if (Is-Admin) { return }
     Warn "Administrator permission is required because a Windows/WSL prerequisite is missing."
-    $args = @("-NoProfile","-ExecutionPolicy","Bypass","-File",$PSCommandPath,"-Drones",$Drones,"-Distro",$Distro)
-    if ($Doctor) { $args += "-Doctor" }
-    if ($SkipTests) { $args += "-SkipTests" }
-    if ($NoGrok) { $args += "-NoGrok" }
-    if ($NoGazebo) { $args += "-NoGazebo" }
-    if ($Stop) { $args += "-Stop" }
-    Start-Process powershell.exe -Verb RunAs -ArgumentList $args
+    $argLine = '-NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Drones ' + $Drones + ' -Distro "' + $Distro + '"'
+    if ($Doctor) { $argLine += " -Doctor" }
+    if ($SkipTests) { $argLine += " -SkipTests" }
+    if ($NoGrok) { $argLine += " -NoGrok" }
+    if ($NoGazebo) { $argLine += " -NoGazebo" }
+    if ($Stop) { $argLine += " -Stop" }
+    Start-Process powershell.exe -Verb RunAs -ArgumentList $argLine
     exit 0
 }
 
@@ -125,10 +125,10 @@ $repoWsl = (& wsl.exe -d $Distro -- wslpath -a "$Root").Trim()
 if (-not $repoWsl) { throw "Could not translate the repository path into WSL." }
 
 $env:DRONE_SOURCE_ROOT = $repoWsl
-Add-WSLEnv "DRONE_SOURCE_ROOT/u"
+Add-WSLEnv "DRONE_SOURCE_ROOT"
 if ($env:XAI_API_KEY) {
-    Add-WSLEnv "XAI_API_KEY/u"
-    if ($env:DRONE_GROK_MODEL) { Add-WSLEnv "DRONE_GROK_MODEL/u" }
+    Add-WSLEnv "XAI_API_KEY"
+    if ($env:DRONE_GROK_MODEL) { Add-WSLEnv "DRONE_GROK_MODEL" }
     Good "xAI key detected and passed ephemerally to WSL; the key value is not written to reports."
 } elseif (-not $NoGrok) {
     Warn "XAI_API_KEY is not set. Core fleet system will run; Grok advisor will stay disabled."
