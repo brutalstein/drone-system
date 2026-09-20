@@ -29,6 +29,11 @@ if ! grep -qi ubuntu /etc/os-release; then
   fail "Ubuntu is required for the supported ROS 2 / Gazebo stack."
   exit 3
 fi
+UBUNTU_VERSION=$( . /etc/os-release && printf '%s' "$VERSION_ID" )
+if [ "$UBUNTU_VERSION" != "24.04" ]; then
+  fail "Supported baseline is Ubuntu 24.04; detected $UBUNTU_VERSION."
+  exit 3
+fi
 
 step "Inspecting Linux / WSL environment"
 CPU_COUNT=$(nproc)
@@ -40,7 +45,15 @@ MEM_JOBS=$((MEM_GB / 2))
 [ "$MEM_JOBS" -lt 1 ] && MEM_JOBS=1
 [ "$JOBS" -gt "$MEM_JOBS" ] && JOBS=$MEM_JOBS
 [ "$JOBS" -gt 8 ] && JOBS=8
-ok "CPU threads: $CPU_COUNT • RAM: ~$MEM_GB GiB • build workers: $JOBS"
+DISK_FREE_KB=$(df -Pk "$ROOT" | awk 'NR==2 {print $4}')
+DISK_FREE_GB=$((DISK_FREE_KB / 1024 / 1024))
+IS_WSL=0
+if grep -qi microsoft /proc/version 2>/dev/null; then IS_WSL=1; fi
+ok "Ubuntu: $UBUNTU_VERSION • CPU threads: $CPU_COUNT • RAM: ~$MEM_GB GiB • free disk: ~$DISK_FREE_GB GiB • build workers: $JOBS"
+if [ "$DISK_FREE_GB" -lt 6 ]; then
+  fail "At least 6 GiB of free Linux filesystem space is required for a safe build."
+  exit 5
+fi
 
 BASE_PACKAGES="curl gnupg lsb-release software-properties-common git build-essential cmake ninja-build python3-pip python3-colcon-common-extensions python3-rosdep python3-vcstool qtbase5-dev libqt5svg5-dev libcurl4-openssl-dev nlohmann-json3-dev clang clang-tidy tmux jq pciutils"
 ROS_PACKAGES="ros-jazzy-ros-base ros-jazzy-ros-gz"
@@ -147,11 +160,27 @@ for line in run(["dpkg-query","-W"]).splitlines():
     if len(parts)==2:
         rows.append({"name":parts[0],"version":parts[1]})
 
+tool_commands = {
+    "git": "git --version",
+    "cmake": "cmake --version | head -n 1",
+    "ninja": "ninja --version",
+    "python3": "python3 --version",
+    "colcon": "colcon version-check 2>/dev/null || command -v colcon",
+    "ros2": "ros2 --help >/dev/null 2>&1 && echo available || true",
+    "gz": "gz --version 2>/dev/null | head -n 1 || true",
+    "clang": "clang --version | head -n 1",
+    "clang_tidy": "clang-tidy --version | head -n 1",
+    "tmux": "tmux -V",
+}
+tool_versions = {name: run(["bash","-lc",cmd]) for name,cmd in tool_commands.items()}
+
 report={
     "generated_at_utc":run(["date","-u","+%Y-%m-%dT%H:%M:%SZ"]),
     "platform":platform.platform(),
     "kernel":platform.release(),
     "wsl_distro":os.getenv("WSL_DISTRO_NAME",""),
+    "wsl_interop":bool(os.getenv("WSL_INTEROP")),
+    "ubuntu_version":run(["bash","-lc",". /etc/os-release && echo $VERSION_ID"]),
     "cpu_threads":os.cpu_count(),
     "memory":run(["bash","-lc","awk '/MemTotal/ {print $2 " kB"}' /proc/meminfo"]),
     "gpu":run(["bash","-lc","lspci 2>/dev/null | grep -Ei 'vga|3d|display' || true"]),
@@ -161,6 +190,8 @@ report={
     "cmake":run(["bash","-lc","cmake --version | head -n 1"]),
     "compiler":run(["bash","-lc","c++ --version | head -n 1"]),
     "build_workers":int(sys.argv[3]),
+    "disk_free":run(["bash","-lc","df -h --output=avail,target . | tail -n 1"]),
+    "tool_versions":tool_versions,
     "xai_key_configured":bool(os.getenv("XAI_API_KEY")),
     "missing_before_run":[x for x in sys.argv[2].split() if x],
     "installed_packages":rows,
