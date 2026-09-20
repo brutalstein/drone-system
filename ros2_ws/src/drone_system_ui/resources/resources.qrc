@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/assets">
+    <file alias="brand_mark.svg">../assets/brand_mark.svg</file>
+    <file alias="empty_fleet.svg">../assets/empty_fleet.svg</file>
+    <file alias="theme.qss">../assets/theme.qss</file>
+  </qresource>
+</RCC>

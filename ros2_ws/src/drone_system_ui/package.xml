@@ -1,11 +1,12 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>drone_system_ui</name>
-  <version>0.1.0</version>
-  <description>Qt fleet operator console.</description>
+  <version>0.2.0</version>
+  <description>Premium Qt fleet operations console for drone-system.</description>
   <maintainer email="maintainers@example.invalid">drone-system contributors</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
   <depend>drone_system_interfaces</depend>
 </package>

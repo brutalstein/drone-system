@@ -14,7 +14,6 @@ find_package(drone_system_core REQUIRED)
 add_executable(fleet_simulator src/fleet_simulator.cpp)
 ament_target_dependencies(fleet_simulator
   rclcpp geometry_msgs drone_system_interfaces drone_system_core)
-target_link_libraries(fleet_simulator drone_state_machine)
 target_compile_options(fleet_simulator PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS fleet_simulator DESTINATION lib/${PROJECT_NAME})

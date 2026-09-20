@@ -1,0 +1,8 @@
+<svg width="520" height="300" viewBox="0 0 520 300" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="ring" x1="80" y1="30" x2="440" y2="270" gradientUnits="userSpaceOnUse"><stop stop-color="#16D9FF" stop-opacity=".8"/><stop offset="1" stop-color="#8B5CF6" stop-opacity=".18"/></linearGradient></defs>
+  <g fill="none"><ellipse cx="260" cy="155" rx="190" ry="105" stroke="#20354D" stroke-width="2"/><ellipse cx="260" cy="155" rx="135" ry="75" stroke="#1A2A40" stroke-width="2"/><ellipse cx="260" cy="155" rx="80" ry="44" stroke="url(#ring)" stroke-width="2"/>
+  <path d="M68 155h384M260 40v230" stroke="#182A3E"/><path d="M220 130h80l16 25-16 25h-80l-16-25 16-25Z" fill="#122239" stroke="#3C6B8D" stroke-width="2"/>
+  <rect x="246" y="120" width="28" height="70" rx="12" fill="#17CFF4" opacity=".82"/><path d="M220 132 176 98M300 132l44-34M220 178l-44 34M300 178l44 34" stroke="#6C63FF" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="166" cy="90" r="20" stroke="#16D9FF" stroke-width="6"/><circle cx="354" cy="90" r="20" stroke="#8B5CF6" stroke-width="6"/><circle cx="166" cy="220" r="20" stroke="#8B5CF6" stroke-width="6"/><circle cx="354" cy="220" r="20" stroke="#16D9FF" stroke-width="6"/></g>
+  <text x="260" y="284" text-anchor="middle" fill="#6F88A4" font-size="14" font-family="Segoe UI, sans-serif">Waiting for fleet telemetry</text>
+</svg>

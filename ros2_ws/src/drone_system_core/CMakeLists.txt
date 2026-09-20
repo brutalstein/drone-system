@@ -32,14 +32,16 @@ else()
   message(WARNING "CURL/nlohmann_json not found: grok_advisor will not be built")
 endif()
 
-install(TARGETS drone_state_machine fleet_manager
-  EXPORT drone_system_coreTargets
+install(TARGETS drone_state_machine
+  EXPORT export_drone_state_machine
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib/${PROJECT_NAME})
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include)
+install(TARGETS fleet_manager DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 
-ament_export_targets(drone_system_coreTargets HAS_LIBRARY_TARGET)
+ament_export_targets(export_drone_state_machine HAS_LIBRARY_TARGET)
 ament_export_libraries(drone_state_machine)
 ament_export_include_directories(include)
 
