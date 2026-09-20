@@ -12,3 +12,4 @@ __pycache__/
 !.env.example
 coverage/
 compile_commands.json
+runtime/
