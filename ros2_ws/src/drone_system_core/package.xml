@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>drone_system_core</name>
+  <version>0.1.0</version>
+  <description>Deterministic fleet control core and optional Grok advisor.</description>
+  <maintainer email="maintainers@example.invalid">drone-system contributors</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>drone_system_interfaces</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+</package>
