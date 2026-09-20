@@ -113,3 +113,36 @@ TEST(StateMachine, EmergencyStopIsLatchedUntilExplicitHold) {
   EXPECT_EQ(sm.setpoint().mode, Mode::Hold);
   EXPECT_FALSE(sm.failsafe_active());
 }
+
+
+TEST(StateMachine, AcceptsBoundedGotoPosition) {
+  StateMachine sm;
+  const auto now = StateMachine::Clock::now();
+  Command c;
+  c.sequence = 1;
+  c.mode = Mode::GotoPosition;
+  c.target_x = 12.0;
+  c.target_y = -4.0;
+  c.target_z = 6.0;
+  c.max_speed_mps = 2.5;
+  ASSERT_TRUE(sm.accept(c, now, now));
+  EXPECT_EQ(sm.setpoint().mode, Mode::GotoPosition);
+  EXPECT_DOUBLE_EQ(sm.setpoint().target_x, 12.0);
+  EXPECT_DOUBLE_EQ(sm.setpoint().target_y, -4.0);
+  EXPECT_DOUBLE_EQ(sm.setpoint().target_z, 6.0);
+}
+
+TEST(StateMachine, RejectsUnsafeGotoPosition) {
+  StateMachine sm;
+  const auto now = StateMachine::Clock::now();
+  Command c;
+  c.sequence = 1;
+  c.mode = Mode::GotoPosition;
+  c.target_z = 200.0;
+  c.max_speed_mps = 2.0;
+  EXPECT_FALSE(sm.accept(c, now, now));
+
+  c.target_z = 3.0;
+  c.max_speed_mps = 99.0;
+  EXPECT_FALSE(sm.accept(c, now, now));
+}
