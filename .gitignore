@@ -1,0 +1,14 @@
+build/
+install/
+log/
+.vscode/
+.idea/
+*.user
+*.swp
+*.pyc
+__pycache__/
+.env
+.env.*
+!.env.example
+coverage/
+compile_commands.json
