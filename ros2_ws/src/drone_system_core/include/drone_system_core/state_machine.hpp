@@ -13,6 +13,7 @@ enum class Mode : std::uint8_t {
   ReturnHome = 3,
   Velocity = 4,
   EmergencyStop = 5,
+  GotoPosition = 6,
 };
 
 struct Limits {
@@ -33,6 +34,10 @@ struct Command {
   double vz{0.0};
   double yaw_rate{0.0};
   double takeoff_altitude_m{0.0};
+  double target_x{0.0};
+  double target_y{0.0};
+  double target_z{0.0};
+  double max_speed_mps{1.5};
   std::chrono::milliseconds lease{1000};
 };
 
@@ -43,6 +48,10 @@ struct Setpoint {
   double vz{0.0};
   double yaw_rate{0.0};
   double takeoff_altitude_m{0.0};
+  double target_x{0.0};
+  double target_y{0.0};
+  double target_z{0.0};
+  double max_speed_mps{1.5};
 };
 
 class StateMachine {
