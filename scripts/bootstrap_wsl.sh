@@ -4,7 +4,7 @@ set -euo pipefail
 grep -qi "ubuntu" /etc/os-release || { echo "Ubuntu required" >&2; exit 2; }
 
 sudo apt-get update
-sudo apt-get install -y curl gnupg lsb-release software-properties-common git build-essential cmake ninja-build python3-pip python3-colcon-common-extensions python3-rosdep python3-vcstool qtbase5-dev libcurl4-openssl-dev clang clang-tidy
+sudo apt-get install -y curl gnupg lsb-release software-properties-common git build-essential cmake ninja-build python3-pip python3-colcon-common-extensions python3-rosdep python3-vcstool qtbase5-dev libcurl4-openssl-dev nlohmann-json3-dev clang clang-tidy
 
 if ! command -v ros2 >/dev/null 2>&1; then
   sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
