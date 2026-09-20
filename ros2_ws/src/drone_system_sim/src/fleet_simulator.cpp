@@ -190,7 +190,7 @@ class FleetSimulator final : public rclcpp::Node {
       t.yaw_rad = d.yaw;
       t.battery_pct = static_cast<float>(d.battery);
       t.link_quality_pct = static_cast<float>(
-          std::clamp(100.0 - hb_age.count() * 100.0 / std::max(1LL, limits_.land_after.count()), 0.0, 100.0));
+          std::clamp(100.0 - hb_age.count() * 100.0 / std::max<std::int64_t>(1, static_cast<std::int64_t>(limits_.land_after.count())), 0.0, 100.0));
       t.peer_count = drones_.empty() ? 0U : static_cast<std::uint32_t>(drones_.size() - 1);
       t.cpu_pct = 0.0F;
       t.memory_mb = 0.0F;
@@ -199,7 +199,7 @@ class FleetSimulator final : public rclcpp::Node {
       t.failsafe_active = d.brain.failsafe_active();
       t.failsafe_reason = d.brain.failsafe_reason();
       t.manager_heartbeat_age_ms = static_cast<std::uint32_t>(
-          std::clamp<long long>(hb_age.count(), 0, 0xffffffffLL));
+          std::clamp<std::int64_t>(static_cast<std::int64_t>(hb_age.count()), 0, 0xffffffffLL));
       telemetry_pub_->publish(t);
     }
   }
