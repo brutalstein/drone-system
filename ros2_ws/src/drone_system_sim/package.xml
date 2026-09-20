@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>drone_system_sim</name>
+  <version>0.1.0</version>
+  <description>Deterministic multi-drone simulator and Gazebo Harmonic integration.</description>
+  <maintainer email="maintainers@example.invalid">drone-system contributors</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>drone_system_interfaces</depend>
+  <depend>drone_system_core</depend>
+  <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+</package>
