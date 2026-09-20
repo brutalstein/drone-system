@@ -182,7 +182,7 @@ report={
     "wsl_interop":bool(os.getenv("WSL_INTEROP")),
     "ubuntu_version":run(["bash","-lc",". /etc/os-release && echo $VERSION_ID"]),
     "cpu_threads":os.cpu_count(),
-    "memory":run(["bash","-lc","awk '/MemTotal/ {print $2 " kB"}' /proc/meminfo"]),
+    "memory":run(["bash","-lc","grep -m1 '^MemTotal:' /proc/meminfo"]),
     "gpu":run(["bash","-lc","lspci 2>/dev/null | grep -Ei 'vga|3d|display' || true"]),
     "ros_distro":os.getenv("ROS_DISTRO",""),
     "ros2_path":run(["bash","-lc","command -v ros2 || true"]),
