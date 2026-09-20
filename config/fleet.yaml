@@ -1,0 +1,16 @@
+fleet:
+  ros__parameters:
+    max_drones: 64
+    telemetry_hz: 20.0
+    control_hz: 50.0
+    manager_heartbeat_hz: 5.0
+    stale_telemetry_ms: 1500
+    hold_after_ms: 1200
+    land_after_ms: 5000
+    max_horizontal_speed_mps: 8.0
+    max_vertical_speed_mps: 3.0
+    max_yaw_rate_rps: 1.2
+    max_takeoff_altitude_m: 30.0
+    min_battery_land_pct: 12.0
+    sim_step_ms: 20
+    default_battery_pct: 100.0
