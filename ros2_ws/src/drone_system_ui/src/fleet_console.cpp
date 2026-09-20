@@ -52,6 +52,7 @@ QString mode_name(std::uint8_t mode) {
     case FleetCommand::RETURN_HOME: return "RETURN";
     case FleetCommand::VELOCITY: return "VELOCITY";
     case FleetCommand::EMERGENCY_STOP: return "E-STOP";
+    case FleetCommand::GOTO_POSITION: return "GOTO";
     default: return "UNKNOWN";
   }
 }
@@ -260,6 +261,13 @@ class FleetConsole final : public QMainWindow {
     auto* safety_title = new QLabel("CONTROL ENVELOPE"); safety_title->setObjectName("sectionSub");
     auto* safety_body = new QLabel("8 m/s horizontal\n3 m/s vertical\n1.2 rad/s yaw"); safety_body->setProperty("muted",true);
     safety_layout->addWidget(safety_title); safety_layout->addWidget(safety_body); side->addWidget(safety);
+    auto* mesh = new QLabel;
+    QPixmap mesh_pix(":/assets/fleet_mesh.svg");
+    mesh->setPixmap(mesh_pix.scaled(188,72,Qt::KeepAspectRatioByExpanding,Qt::SmoothTransformation));
+    mesh->setFixedHeight(72);
+    mesh->setAlignment(Qt::AlignCenter);
+    mesh->setObjectName("meshVisual");
+    side->addWidget(mesh);
     auto* stack = new QLabel("ROS 2 Jazzy\nGazebo Harmonic • C++20"); stack->setProperty("muted",true); side->addWidget(stack);
 
     auto* body_widget = new QWidget;
@@ -292,7 +300,16 @@ class FleetConsole final : public QMainWindow {
     table_->setHorizontalHeaderLabels({"Drone","Mode","Position","Velocity","Battery","Link","Peers","Armed","Failsafe","HB age"});
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents); table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false); table_->setShowGrid(false); table_->setAlternatingRowColors(true);
-    table_->setSelectionBehavior(QAbstractItemView::SelectRows); table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table_->setSelectionBehavior(QAbstractItemView::SelectRows); table_->setSelectionMode(QAbstractItemView::SingleSelection); table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    connect(table_, &QTableWidget::cellClicked, this, [this](int row, int) {
+      auto* item = table_->item(row, 0);
+      if (!item) return;
+      const int idx = target_->findData(item->text());
+      if (idx >= 0) {
+        target_->setCurrentIndex(idx);
+        log_event(QString("Control target selected: %1").arg(item->text()), "#7DE7FF");
+      }
+    });
     telemetry_layout->addWidget(table_); top->addWidget(telemetry_card); top->setStretchFactor(0,5); top->setStretchFactor(1,7);
     body->addWidget(top,5);
 
@@ -314,6 +331,23 @@ class FleetConsole final : public QMainWindow {
     auto* rtl=button("Return Home"); connect(rtl,&QPushButton::clicked,this,[this]{send_simple(FleetCommand::RETURN_HOME,"RETURN_HOME");});
     auto* hold=button("Hold"); hold->setProperty("hold",true); connect(hold,&QPushButton::clicked,this,[this]{send_simple(FleetCommand::HOLD,"HOLD");});
     actions->addWidget(takeoff); actions->addWidget(land); actions->addWidget(rtl); actions->addWidget(hold); control->addLayout(actions);
+
+    auto* precision = new QFrame; precision->setProperty("controlGroup", true);
+    auto* precision_layout = new QVBoxLayout(precision); precision_layout->setContentsMargins(12,10,12,10); precision_layout->setSpacing(7);
+    auto* precision_title = new QLabel("PRECISION TARGET"); precision_title->setObjectName("controlGroupTitle");
+    auto* precision_hint = new QLabel("Absolute simulator coordinates • bounded speed • one or all drones"); precision_hint->setProperty("muted",true);
+    precision_layout->addWidget(precision_title); precision_layout->addWidget(precision_hint);
+    auto* goto_grid = new QGridLayout;
+    goto_x_=spin(-500.0,500.0,0.0," m"); goto_y_=spin(-500.0,500.0,0.0," m");
+    goto_z_=spin(0.0,30.0,3.0," m"); goto_speed_=spin(0.1,8.0,2.0," m/s");
+    goto_grid->addWidget(new QLabel("X"),0,0); goto_grid->addWidget(goto_x_,0,1);
+    goto_grid->addWidget(new QLabel("Y"),0,2); goto_grid->addWidget(goto_y_,0,3);
+    goto_grid->addWidget(new QLabel("Z"),1,0); goto_grid->addWidget(goto_z_,1,1);
+    goto_grid->addWidget(new QLabel("Max speed"),1,2); goto_grid->addWidget(goto_speed_,1,3);
+    auto* goto_button = button("Send Position Target", true);
+    connect(goto_button,&QPushButton::clicked,this,[this]{send_goto(goto_x_->value(),goto_y_->value(),goto_z_->value(),goto_speed_->value());});
+    precision_layout->addLayout(goto_grid); precision_layout->addWidget(goto_button);
+    control->addWidget(precision);
 
     auto* pad=new QGridLayout;
     auto* forward=button("↑  Forward"); auto* left=button("←  Left"); auto* stop=button("■  HOLD"); stop->setProperty("hold",true);
@@ -337,7 +371,7 @@ class FleetConsole final : public QMainWindow {
       if(choice==QMessageBox::Yes) send_simple(FleetCommand::EMERGENCY_STOP,"EMERGENCY_STOP");
     });
     control->addWidget(emergency);
-    command_line_=new QLineEdit; command_line_->setPlaceholderText("Command palette: takeoff 5 | vel 1 0 0 0.2 | land | rtl | hold | stop");
+    command_line_=new QLineEdit; command_line_->setPlaceholderText("Command palette: goto 10 -4 6 2 | takeoff 5 | vel 1 0 0 0.2 | land | rtl | hold | stop");
     connect(command_line_,&QLineEdit::returnPressed,this,[this]{parse_command();}); control->addWidget(command_line_);
     auto* shortcut=new QLabel("Keyboard: W/A/S/D move • R/F altitude • Q/E yaw • Space hold"); shortcut->setProperty("muted",true); control->addWidget(shortcut);
     bottom->addWidget(control_card);
@@ -411,6 +445,18 @@ class FleetConsole final : public QMainWindow {
         .arg(selected_target()),"#72DDF7");
     }
   }
+  void send_goto(double x,double y,double z,double speed) {
+    if (!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||!std::isfinite(speed)||
+        z<0.0||z>30.0||speed<=0.0||speed>8.0) {
+      log_event("Local control envelope rejected position target","#FF6685");
+      return;
+    }
+    auto c=base_command(FleetCommand::GOTO_POSITION);
+    c.target_position.x=x;c.target_position.y=y;c.target_position.z=z;c.max_speed_mps=speed;
+    publish(c,QString("GOTO [%1, %2, %3] @ %4 m/s")
+      .arg(x,0,'f',1).arg(y,0,'f',1).arg(z,0,'f',1).arg(speed,0,'f',1));
+  }
+
   void parse_command() {
     const QString raw=command_line_->text().trimmed(); if(raw.isEmpty())return;
     const auto parts=raw.simplified().split(' '); const QString cmd=parts[0].toLower();
@@ -419,8 +465,9 @@ class FleetConsole final : public QMainWindow {
     else if(cmd=="rtl"||cmd=="return"||cmd=="home")send_simple(FleetCommand::RETURN_HOME,"RETURN_HOME");
     else if(cmd=="stop"||cmd=="estop")send_simple(FleetCommand::EMERGENCY_STOP,"EMERGENCY_STOP");
     else if(cmd=="takeoff"&&parts.size()==2){bool ok=false;double altitude=parts[1].toDouble(&ok);if(!ok||altitude<0.2||altitude>30.0)log_event("takeoff altitude must be 0.2..30 m","#FFB45B");else{auto c=base_command(FleetCommand::TAKEOFF);c.takeoff_altitude_m=altitude;publish(c,QString("TAKEOFF %1 m").arg(altitude,0,'f',2));}}
+    else if(cmd=="goto"&&parts.size()==5){bool a=false,b=false,c=false,d=false;double x=parts[1].toDouble(&a),y=parts[2].toDouble(&b),z=parts[3].toDouble(&c),speed=parts[4].toDouble(&d);if(a&&b&&c&&d)send_goto(x,y,z,speed);else log_event("goto syntax: goto x y z max_speed","#FFB45B");}
     else if(cmd=="vel"&&parts.size()==5){bool a=false,b=false,c=false,d=false;double vx=parts[1].toDouble(&a),vy=parts[2].toDouble(&b),vz=parts[3].toDouble(&c),yaw=parts[4].toDouble(&d);if(a&&b&&c&&d)send_velocity(vx,vy,vz,yaw);else log_event("vel syntax: vel vx vy vz yaw_rate","#FFB45B");}
-    else log_event("Unknown command. Use takeoff, vel, land, rtl, hold or stop.","#FFB45B");
+    else log_event("Unknown command. Use goto, takeoff, vel, land, rtl, hold or stop.","#FFB45B");
     command_line_->clear();
   }
   void ask_ai() {
@@ -451,7 +498,7 @@ class FleetConsole final : public QMainWindow {
   }
 
   std::uint64_t sequence_{0};std::shared_ptr<rclcpp::Node> node_;rclcpp::Publisher<FleetCommand>::SharedPtr command_pub_;rclcpp::Publisher<std_msgs::msg::String>::SharedPtr ai_query_pub_;rclcpp::Subscription<Telemetry>::SharedPtr telemetry_sub_;rclcpp::Subscription<std_msgs::msg::String>::SharedPtr ai_answer_sub_;
-  QComboBox* target_{};QLabel* connection_{};MetricCard* active_card_{};MetricCard* battery_card_{};MetricCard* link_card_{};MetricCard* failsafe_card_{};FleetRadar* radar_{};QTableWidget* table_{};QDoubleSpinBox* horizontal_speed_{};QDoubleSpinBox* vertical_speed_{};QDoubleSpinBox* yaw_rate_{};QDoubleSpinBox* takeoff_alt_{};QLineEdit* command_line_{};QLineEdit* ai_query_{};QTextBrowser* ai_answer_{};QTextBrowser* event_log_{};QTimer* ros_timer_{};QTimer* ui_timer_{};QTimer* manual_timer_{};
+  QComboBox* target_{};QLabel* connection_{};MetricCard* active_card_{};MetricCard* battery_card_{};MetricCard* link_card_{};MetricCard* failsafe_card_{};FleetRadar* radar_{};QTableWidget* table_{};QDoubleSpinBox* horizontal_speed_{};QDoubleSpinBox* vertical_speed_{};QDoubleSpinBox* yaw_rate_{};QDoubleSpinBox* takeoff_alt_{};QDoubleSpinBox* goto_x_{};QDoubleSpinBox* goto_y_{};QDoubleSpinBox* goto_z_{};QDoubleSpinBox* goto_speed_{};QLineEdit* command_line_{};QLineEdit* ai_query_{};QTextBrowser* ai_answer_{};QTextBrowser* event_log_{};QTimer* ros_timer_{};QTimer* ui_timer_{};QTimer* manual_timer_{};
   bool manual_active_{false};
   double manual_vx_{0.0},manual_vy_{0.0},manual_vz_{0.0},manual_yaw_{0.0};
   std::unordered_map<std::string,FleetEntry> fleet_;
